@@ -207,7 +207,7 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
   </section>
 
   <footer>
-    <span>Dados: <a href="https://brapi.dev" target="_blank" rel="noopener">brapi.dev</a> (B3, BCB). Plano gratuito tem atraso de até 30 min e histórico de 3 meses. Não é recomendação de investimento. Código: <a href="https://github.com/adriansodr3/painel-b3" target="_blank" rel="noopener">GitHub</a>.</span>
+    <span>Dados: <a href="https://brapi.dev" target="_blank" rel="noopener">brapi.dev</a> (B3, BCB). Plano gratuito tem atraso de até 30 min e histórico de 3 meses. Não é recomendação de investimento.</span>
     <span id="reqs">&nbsp;</span>
   </footer>
 </div>
@@ -538,14 +538,19 @@ async function loadMarket(){
     setTxt("m-ibov", q?num(q.regularMarketPrice,0)+" pts":"—");
     setTxt("m-ibov-c", q?pct(q.regularMarketChangePercent):"", cls(q&&q.regularMarketChangePercent));
   }).catch(e=>{ setTxt("m-ibov","—"); setTxt("m-ibov-c", e.status===401?"requer token":"indisponível","muted"); });
-  // Moedas
-  api("/v2/currency",{currency:"USD-BRL,EUR-BRL"}).then(j=>{
-    for(const c of (j.currency||[])){
-      const id = c.fromCurrency==="USD"?"usd":c.fromCurrency==="EUR"?"eur":null; if(!id) continue;
+  // Moedas (uma por requisição: o plano grátis limita 1 ativo por chamada)
+  for(const [pair,id] of [["USD-BRL","usd"],["EUR-BRL","eur"]]){
+    api("/v2/currency",{currency:pair}).then(j=>{
+      const c=(j.currency||[])[0];
+      if(!c) throw new ApiError(0,"resposta vazia");
       const p=parseFloat(c.bidPrice), ch=parseFloat(c.percentageChange);
       setTxt("m-"+id, brl(p)); setTxt("m-"+id+"-c", pct(ch), cls(ch));
-    }
-  }).catch(e=>{ ["usd","eur"].forEach(id=>{ setTxt("m-"+id,"—"); setTxt("m-"+id+"-c",e.status===401?"requer token":"indisponível","muted"); }); });
+    }).catch(e=>{
+      setTxt("m-"+id,"—");
+      setTxt("m-"+id+"-c", e.status===401&&!state.token?"requer token":"erro "+(e.status||"")+": "+(e.message||"").slice(0,40),"muted");
+      $("m-"+id+"-c").title=e.message||"";
+    });
+  }
   // Selic
   api("/v2/prime-rate",{country:"brazil",sortBy:"date",sortOrder:"desc"},6*3600*1000).then(j=>{
     const r=(j["prime-rate"]||[])[0];
